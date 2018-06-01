@@ -22,23 +22,28 @@ def get_center_loss(features, labels, alpha,alpha1, num_classes):
     pairwise_grad_val = {}
     for idx,item in enumerate(combination):
         index = idx/(num_classes-1)
-        lc_grad = pairwise_grad(fea,item)
+        lc_grad = pairwise_grad(features,item)
         if idx%(num_classes-1) == 0:
-            if index in cate:
+            if index in pairwise_grad_val:
+                pairwise_grad_val[index] += lc_grad
+            else:
+                pairwise_grad_val[index] = lc_grad
+        else:
+            if index in pairwise_grad_val:
                 pairwise_grad_val[index] += lc_grad
             else:
                 pairwise_grad_val[index] = lc_grad
 
-    grad_pairwise = pairwise_grad_val[0]
-    for idx in range(1,num_classes):
-        grad_pairwise = tf.stack([grad_pairwise,pairwise_grad_val[idx]])
+    grad_pairwise = []
+    for idx in range(num_classes):
+        grad_pairwise.append(pairwise_grad_val[idx])
+
+    grad_pairwise = tf.convert_to_tensor(grad_pairwise)
 
     grad_pairwsise_batch = tf.gather(grad_pairwise,labels)
 
-
-
-    #pair_distance_loss,pairwise_grad
-    pair_distance_loss = [].append(map(lambda x:pairwise_distance(centers_batch,x),combination))
+    pair_distance_loss = []
+    pair_distance_loss.append(map(lambda x:pairwise_distance(centers_batch,x),combination))
 
     pair_distance_loss = tf.reduce_sum(pair_distance_loss)
 
@@ -53,12 +58,9 @@ def get_center_loss(features, labels, alpha,alpha1, num_classes):
     appear_times = tf.reshape(appear_times, [-1, 1])
 
     diff = diff / tf.cast((1 + appear_times), tf.float32)
-    diff = diff + alpha1*(num_classes-1)*grad_pairwsise_batch
+    diff = diff + alpha1*grad_pairwsise_batch/(num_classes-1)
 
     diff = alpha * diff
-
-
-
     centers_update_op = tf.scatter_sub(centers, labels, diff)
 
     return loss, centers, centers_update_op
@@ -94,8 +96,13 @@ def pairwise_grad(fea,com):
 
 
 if __name__ == "__main__":
-    feature = tf.placeholder(dtype=tf.float32,shape=[64,1024],name="feature")
-    label   = tf.placeholder(dtype=tf.int32,shape=[64],name="label")
+    feature = np.arange(8192).reshape((32,256))
+    feature = tf.convert_to_tensor(feature)
+    feature = tf.cast(feature,dtype=tf.float32)
+    label   = np.repeat([0,1,2,3,3,4,5,6],4)
+    label   = tf.convert_to_tensor(label)
+    #feature = tf.placeholder(dtype=tf.float32,shape=[64,1024],name="feature")
+    #label   = tf.placeholder(dtype=tf.int32,shape=[64],name="label")
     alpha   = 0.4
     alpha2  = 0.5
     num_classes = 7
